@@ -136,10 +136,12 @@ func TestExtendedRef(t *testing.T) {
 		intermediate = append(intermediate, seq...)
 		intermediate = append(intermediate, 0x00)
 	}
-	// next free slot is 0x1A (since 0x09/0x0A were skipped, not filled)
+	// next free slot is 0x1E (since reserved bytes were skipped, not filled)
+	// But 0x1E is rleTab, so it's reserved — next free is 0x20.
+	// Actually 0x1E and 0x1F are reserved (RLE), so first extended is 0x20.
 	intermediate = append(intermediate, 0x00, 'h', 'i', 0x00)
-	// reference it via null-DEL-0x1A
-	intermediate = append(intermediate, 0x00, delByte, 0x1A)
+	// reference it via null-DEL-0x20
+	intermediate = append(intermediate, 0x00, delByte, 0x20)
 
 	got, err := tableExpand(intermediate)
 	if err != nil {
@@ -163,8 +165,8 @@ func TestExtendedRefManual(t *testing.T) {
 		}
 		intermediate = append(intermediate, 0x00, minGlyph+s, minGlyph+s, 0x00)
 	}
-	// slots 0x1A through 0xEF
-	for s := byte(0x1A); s <= 0xEF; s++ {
+	// slots 0x20 through 0xEF (0x1E/0x1F are reserved for RLE)
+	for s := byte(0x20); s <= 0xEF; s++ {
 		intermediate = append(intermediate, 0x00, minGlyph+(s%84), minGlyph+((s+1)%84), 0x00)
 	}
 	// slot 0xF0 = "cd"
@@ -186,10 +188,11 @@ func TestRefCost(t *testing.T) {
 		t.Errorf("refCost(0x01) = %d, want 1", rc)
 	}
 	if rc := refCost(maxDirectRef); rc != 1 {
-		t.Errorf("refCost(0x19) = %d, want 1", rc)
+		t.Errorf("refCost(0x1D) = %d, want 1", rc)
 	}
-	if rc := refCost(0x1A); rc != 3 {
-		t.Errorf("refCost(0x1A) = %d, want 3", rc)
+	// 0x1E and 0x1F are reserved for RLE, so first extended is 0x20
+	if rc := refCost(0x20); rc != 3 {
+		t.Errorf("refCost(0x20) = %d, want 3", rc)
 	}
 	if rc := refCost(0xF0); rc != 3 {
 		t.Errorf("refCost(0xF0) = %d, want 3", rc)
@@ -254,6 +257,75 @@ func TestStats(t *testing.T) {
 	}
 	if ratio <= 0 {
 		t.Errorf("expected positive ratio, got %f", ratio)
+	}
+}
+
+func TestRLERoundTrip(t *testing.T) {
+	cases := []string{
+		"    four spaces",
+		"        eight spaces",
+		"                    twenty spaces",
+		"\t\t\t\ttabs here",
+		"    a    b    c    ",
+		"no runs here",
+		"   three spaces not rle",
+		"  two spaces not rle",
+		"mixed    spaces\t\t\t\ttabs",
+		strings.Repeat("    ", 50) + "end",
+	}
+	for _, tc := range cases {
+		src := []byte(tc)
+		enc, err := Encode(src)
+		if err != nil {
+			t.Fatalf("Encode(%q): %v", tc, err)
+		}
+		dec, err := Decode(enc)
+		if err != nil {
+			t.Fatalf("Decode(Encode(%q)): %v", tc, err)
+		}
+		if !bytes.Equal(src, dec) {
+			t.Errorf("RLE round-trip failed for %q: got %q", tc, dec)
+		}
+	}
+}
+
+func TestRLECompress(t *testing.T) {
+	// 4 spaces → {rleSpace, 0x0B} (count 4-4+0x0B = 0x0B)
+	got := rleCompress([]byte("    "))
+	if len(got) != 2 || got[0] != rleSpace || got[1] != rleCountBase {
+		t.Errorf("4 spaces: got %x, want [1f 0b]", got)
+	}
+	// 3 spaces stay literal
+	got = rleCompress([]byte("   "))
+	if len(got) != 3 {
+		t.Errorf("3 spaces: got %x, want 3 literal bytes", got)
+	}
+	// 5 tabs → {rleTab, 0x0C}
+	got = rleCompress([]byte("\t\t\t\t\t"))
+	if len(got) != 2 || got[0] != rleTab || got[1] != rleCountBase+1 {
+		t.Errorf("5 tabs: got %x, want [1e 0c]", got)
+	}
+	// 15 spaces = max single RLE
+	got = rleCompress([]byte(strings.Repeat(" ", 15)))
+	if len(got) != 2 || got[0] != rleSpace {
+		t.Errorf("15 spaces: got %x (len %d), want 2 bytes", got, len(got))
+	}
+	// 16 spaces = RLE(15) + 1 literal space
+	got = rleCompress([]byte(strings.Repeat(" ", 16)))
+	if len(got) != 3 { // {rleSpace, count15} + ' '
+		t.Errorf("16 spaces: got %x (len %d), want 3 bytes", got, len(got))
+	}
+	// Verify round-trip
+	for _, n := range []int{4, 5, 8, 10, 15, 16, 20, 30} {
+		src := []byte(strings.Repeat(" ", n))
+		compressed := rleCompress(src)
+		expanded, err := rleExpand(compressed)
+		if err != nil {
+			t.Fatalf("rle round-trip %d spaces: %v", n, err)
+		}
+		if string(expanded) != string(src) {
+			t.Errorf("rle round-trip %d spaces: got %d spaces", n, len(expanded))
+		}
 	}
 }
 

@@ -238,7 +238,7 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 
 // tableSubstitute finds repeated substrings and replaces them with
 // references, always assigning the lowest free slot. Direct slots
-// (0x01–0x19) use a single-byte ref; extended slots (0x1A–0xFF)
+// (0x01–0x1D) use a single-byte ref; extended slots (0x1E–0xFF)
 // use the 3-byte sequence {null}{DEL}{slot}.
 func tableSubstitute(src []byte) []byte {
 	used := make(map[string]bool)
@@ -362,6 +362,14 @@ func tableExpand(src []byte) ([]byte, error) {
 		case b == tab || b == newline:
 			out = append(out, b)
 			i++
+
+		case b == rleSpace || b == rleTab:
+			// RLE: {marker, countByte} — pass through for rleExpand.
+			if i+1 >= len(src) {
+				return nil, ErrTruncated
+			}
+			out = append(out, src[i], src[i+1])
+			i += 2
 
 		case b >= 0x01 && b <= maxDirectRef:
 			entry, ok := table[b]

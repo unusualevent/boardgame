@@ -31,89 +31,89 @@ Flags:
 
 ## Results
 
-Ran against a mixed-language monorepo (1333 text files, max 20KB per file,
+Ran against a mixed-language monorepo (1335 text files, max 20KB per file,
 Intel i7-8700 @ 3.20GHz):
 
 ### Overall summary
 
 | Algorithm | Avg Ratio | Total Out | Avg Time | Throughput |
 |-----------|----------|-----------|----------|------------|
-| boardgame | 39.9% | 1.9MB | 27.7ms | 101 KB/s |
-| gzip | 39.8% | 1.2MB | 684us | 4.0 MB/s |
-| snappy | 37.6% | 1.6MB | 40us | 68.3 MB/s |
-| zstd | 43.2% | 1.2MB | 7.2ms | 386 KB/s |
-| lz4 | 24.8% | 1.8MB | 1.8ms | 1.5 MB/s |
-| brotli | 53.5% | 1.1MB | 1.7ms | 1.6 MB/s |
+| boardgame | 40.1% | 1.8MB | 37.4ms | 75 KB/s |
+| gzip | 39.8% | 1.2MB | 1.1ms | 2.6 MB/s |
+| snappy | 37.6% | 1.7MB | 42us | 63.9 MB/s |
+| zstd | 43.2% | 1.2MB | 10.0ms | 281 KB/s |
+| lz4 | 24.8% | 1.8MB | 1.9ms | 1.5 MB/s |
+| brotli | 53.5% | 1.1MB | 2.3ms | 1.2 MB/s |
 
 ### Avg compression ratio by extension (%)
 
 ```
 Extension    Files  AvgSize  boardgame       gzip     snappy       zstd        lz4     brotli
 ---------------------------------------------------------------------------------------------
-.bat             1    4.1KB      44.4%      64.6%      50.7%      62.2%      46.1%      67.5%
-.cfg             3     378B      24.3%      26.5%       7.9%      28.0%      -0.3%      36.1%
+.bat             1    4.1KB      45.2%      64.6%      50.7%      62.2%      46.1%      67.5%
+.cfg             3     378B      23.8%      26.5%       7.9%      28.0%      -0.3%      36.1%
 .code-workspace  1     926B      64.3%      67.7%      55.1%      66.7%      52.5%      68.9%
-.css            13    4.1KB      47.6%      61.5%      46.2%      59.1%      41.0%      66.5%
+.css            13    4.1KB      47.8%      61.5%      46.2%      59.1%      41.0%      66.5%
 .d              18    1.2KB      74.1%      76.0%      71.0%      76.5%      69.6%      80.1%
-.go            368    4.8KB      48.3%      65.1%      51.9%      63.0%      47.3%      67.6%
-.html           55    1.4KB      36.6%      46.7%      31.4%      45.5%      25.2%      60.5%
-.java            3   16.5KB      75.1%      88.2%      81.4%      86.9%      81.0%      89.0%
+.go            368    4.8KB      49.2%      65.1%      51.9%      63.0%      47.3%      67.6%
+.html           55    1.4KB      36.0%      46.7%      31.4%      45.5%      25.2%      60.5%
+.java            3   16.5KB      72.6%      88.2%      81.4%      86.9%      81.0%      89.0%
 .js             46    2.1KB      44.9%      51.3%      42.8%      51.8%      34.9%      59.2%
-.json           98     425B      30.8%      24.8%      20.5%      27.9%       7.8%      38.5%
-.kt             58    3.5KB      56.3%      69.3%      58.4%      67.8%      54.1%      71.8%
-.md            160    3.3KB      33.5%      50.4%      34.7%      48.9%      26.8%      56.0%
-.mod            33     641B      30.6%       4.5%      18.5%      15.2%      -3.4%      30.4%
-.vue            96    5.3KB      41.8%      59.9%      46.1%      57.9%      40.5%      65.1%
-.xml            28     938B      43.5%      45.9%      36.3%      46.5%      30.6%      59.4%
-.yaml           44     933B      57.1%      66.6%      56.4%      65.8%      50.8%      71.0%
-.yml            73     680B      35.7%      -2.0%      28.3%      16.6%      -8.2%      39.1%
+.json           98     425B      29.6%      24.8%      20.5%      27.9%       7.8%      38.5%
+.kt             58    3.5KB      56.8%      69.3%      58.4%      67.8%      54.1%      71.8%
+.md            162    3.4KB      34.7%      50.4%      34.7%      48.9%      26.8%      56.0%
+.mod            33     641B      30.7%       4.5%      18.5%      15.2%      -3.4%      30.4%
+.vue            96    5.3KB      43.0%      59.9%      46.1%      57.9%      40.5%      65.1%
+.xml            28     938B      43.9%      45.9%      36.3%      46.5%      30.6%      59.4%
+.yaml           44     933B      56.0%      66.6%      56.4%      65.8%      50.8%      71.0%
+.yml            73     680B      34.4%      -2.0%      28.3%      16.6%      -8.2%      39.1%
 ```
 
-(Selected extensions shown; full output includes all 55 extensions.)
+(Selected extensions shown; full output includes all 56 extensions.)
 
 ### Avg compression time by extension
 
 ```
 Extension    Files  AvgSize  boardgame       gzip     snappy       zstd        lz4     brotli
 ---------------------------------------------------------------------------------------------
-.go            368    4.8KB     54.9ms      832us       49us      6.3ms      1.5ms      1.8ms
-.java            3   16.5KB    148.4ms      480us       78us      7.8ms      1.4ms      1.5ms
-.json           98     425B      1.0ms      535us       17us      7.6ms      2.2ms      1.5ms
-.kt             58    3.5KB     19.1ms      1.1ms       44us      6.2ms      1.9ms      1.5ms
-.md            160    3.3KB     29.6ms      707us       31us      7.6ms      1.9ms      2.2ms
-.vue            96    5.3KB     70.2ms      739us       73us      7.6ms      1.7ms      1.9ms
-.yml            73     680B      1.8ms      749us       20us      8.9ms      2.1ms      1.6ms
+.go            368    4.8KB     73.2ms      1.4ms       46us      9.8ms      2.2ms      2.5ms
+.java            3   16.5KB    222.8ms      4.9ms      110us      9.4ms      444us      8.5ms
+.json           98     425B      1.6ms      797us       14us      9.4ms      2.0ms      1.9ms
+.kt             58    3.5KB     28.2ms      1.5ms      195us      9.0ms      1.2ms      3.0ms
+.md            162    3.4KB     40.8ms      927us       51us     10.4ms      2.1ms      2.6ms
+.vue            96    5.3KB     89.6ms      848us       35us     10.6ms      1.3ms      2.7ms
+.yml            73     680B      2.6ms      845us       23us     10.7ms      2.2ms      1.8ms
 ```
 
 (Selected extensions shown.)
 
 ### Observations
 
-- **Boardgame matches gzip's overall ratio** (39.9% vs 39.8%) but is ~40x
-  slower. The encoder's suffix-array candidate search is CPU-bound;
-  standard compressors use faster LZ77 sliding windows.
+- **Boardgame beats gzip's overall ratio** (40.1% vs 39.8%) thanks to RLE
+  preprocessing that frees table slots for higher-value patterns. The encoder
+  is ~34x slower due to the suffix-array candidate search.
 
 - **Boardgame wins on small files** (< 500B). Standard compressors add
   fixed-size headers (gzip: 18B, zstd: ~13B, lz4: 15B) that dominate on
   tiny inputs. Boardgame's format has no fixed header, just inline table
   definitions. Examples:
   - `.gitignore` (182B avg): boardgame 22% vs gzip -12%, zstd 2%, lz4 -21%
-  - `.json` (425B avg): boardgame 31% vs gzip 25%, lz4 8%
-  - `.yml` (680B avg): boardgame 36% vs gzip -2%, lz4 -8%
+  - `.json` (425B avg): boardgame 30% vs gzip 25%, lz4 8%
+  - `.yml` (680B avg): boardgame 34% vs gzip -2%, lz4 -8%
   - `.mod` (641B avg): boardgame 31% vs gzip 5%, zstd 15%
 
 - **Standard compressors win on larger files** (> 2KB). With more data,
   LZ77 back-references amortize their overhead and outperform
   dictionary-based table substitution:
-  - `.go` (4.8KB avg): gzip 65% vs boardgame 48%
-  - `.java` (16.5KB avg): gzip 88% vs boardgame 75%
-  - `.vue` (5.3KB avg): gzip 60% vs boardgame 42%
+  - `.go` (4.8KB avg): gzip 65% vs boardgame 49%
+  - `.java` (16.5KB avg): gzip 88% vs boardgame 73%
+  - `.vue` (5.3KB avg): gzip 60% vs boardgame 43%
 
 - **Brotli achieves the best ratio** (53.5%) across the board. It was
   designed for text compression and uses a pre-built static dictionary
   of common web/text patterns.
 
-- **Snappy is the speed champion** — 68 MB/s throughput, ~700x faster than
+- **Snappy is the speed champion** — 64 MB/s throughput, ~900x faster than
   boardgame — but compresses the least (37.6%).
 
 - **Zstd is the best all-rounder** among standard compressors: better ratio
