@@ -49,6 +49,14 @@ go run ./example /path/to/project
 go run ./example -exclude testdata -max-size 0 /path/to/project
 ```
 
+A comparison tool benchmarks boardgame against gzip, snappy, zstd, lz4,
+and brotli on the same file set. See
+[example/compare/README.md](example/compare/README.md).
+
+```
+go run ./example/compare /path/to/project
+```
+
 ## Documentation
 
 - [docs/format.md](docs/format.md) — wire format specification
@@ -204,6 +212,33 @@ Avg Compression Ratio vs Avg File Size (sorted by size)
 Overall: **39.8% average compression** across 1332 files. Compression time
 scales superlinearly with file size; ratio improves with size as larger
 files contain more repeated patterns.
+
+### Comparison with standard compressors
+
+Measured on the same file set (1333 files, max 20KB per file):
+
+| Algorithm | Avg Ratio | Avg Time | Throughput |
+|-----------|----------|----------|------------|
+| brotli | 53.5% | 1.7ms | 1.6 MB/s |
+| zstd | 43.2% | 7.2ms | 386 KB/s |
+| **boardgame** | **39.9%** | **27.7ms** | **101 KB/s** |
+| gzip | 39.8% | 684us | 4.0 MB/s |
+| snappy | 37.6% | 40us | 68.3 MB/s |
+| lz4 | 24.8% | 1.8ms | 1.5 MB/s |
+
+Boardgame matches gzip's ratio overall but is ~40x slower due to the
+suffix-array candidate search. Its advantage is on **small files** (< 500B)
+where standard compressors' fixed headers hurt: boardgame compresses
+`.gitignore` (182B) at 22% vs gzip's -12%, `.json` (425B) at 31% vs gzip's
+25%, and `.yml` (680B) at 36% vs gzip's -2%. The 7-bit packing layer
+provides a guaranteed ~12.5% saving that other compressors cannot match on
+sub-kilobyte ASCII inputs.
+
+On larger files (> 2KB), standard LZ77-based compressors outperform
+boardgame's dictionary substitution: gzip reaches 65% on `.go` files vs
+boardgame's 48%.
+
+Full comparison data: [example/compare/README.md](example/compare/README.md).
 
 ## Testing
 
