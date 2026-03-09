@@ -2,7 +2,10 @@
 //
 // Compression has two stages:
 //  1. Table substitution — repeated sequences are placed in a table
-//     delimited by 0x00 bytes and referenced with bytes 0x01–0x19.
+//     delimited by 0x00 bytes and referenced with bytes 0x01–0x19
+//     (up to 25 slots). An unpaired null followed by a ref byte
+//     (0x01–0x19) frees that slot. New entries always claim the
+//     lowest free slot.
 //  2. 7-bit packing — since all ASCII bytes have bit 7 = 0, each byte
 //     is stored as 7 bits. The DEL byte (0x7F) escapes a full 8-bit
 //     value: the next 8 bits are returned unchanged.
@@ -25,6 +28,7 @@ var (
 	ErrBadRef          = errors.New("boardgame: reference to undefined table entry")
 	ErrByteOutOfRange  = errors.New("boardgame: byte outside glyph range and not a valid ref")
 	ErrTruncated       = errors.New("boardgame: unexpected end of bitstream")
+	ErrNoFreeSlot      = errors.New("boardgame: no free table slot available")
 )
 
 // Encode compresses src using table substitution then 7-bit packing.
@@ -50,14 +54,18 @@ func Decode(src []byte) ([]byte, error) {
 
 // pack7 packs a byte slice into a 7-bit stream. The first byte of the
 // output stores the number of padding bits (0–6) in the final byte.
-// Each input byte with bit 7 = 0 is written as 7 bits. Bytes with
-// bit 7 = 1 are escaped: DEL (0x7F) followed by the full 8 bits.
+// Each input byte with bit 7 = 0 is written as 7 bits. DEL (0x7F)
+// in the input signals that the next byte is written as 8 raw bits.
 func pack7(src []byte) []byte {
 	var w bitWriter
-	for _, b := range src {
-		if b&0x80 != 0 {
-			w.writeBits(delByte, 7) // escape
-			w.writeBits(uint(b), 8)
+	for i := 0; i < len(src); i++ {
+		b := src[i]
+		if b == delByte {
+			w.writeBits(delByte, 7)
+			i++
+			if i < len(src) {
+				w.writeBits(uint(src[i]), 8)
+			}
 		} else {
 			w.writeBits(uint(b), 7)
 		}
@@ -73,7 +81,8 @@ func pack7(src []byte) []byte {
 
 // unpack7 unpacks a 7-bit stream back to bytes. The first byte indicates
 // how many padding bits trail the data. DEL (0x7F) signals that the next
-// 8 bits are a raw byte value.
+// 8 bits are a raw byte value; both the DEL marker and the raw byte are
+// emitted so the table layer can see them.
 func unpack7(src []byte) ([]byte, error) {
 	if len(src) == 0 {
 		return nil, nil
@@ -96,7 +105,7 @@ func unpack7(src []byte) ([]byte, error) {
 			if !ok {
 				return nil, ErrTruncated
 			}
-			out = append(out, byte(raw))
+			out = append(out, delByte, byte(raw))
 		} else {
 			out = append(out, byte(v))
 		}
@@ -104,8 +113,19 @@ func unpack7(src []byte) ([]byte, error) {
 	return out, nil
 }
 
+// lowestFreeSlot returns the lowest unused slot number (1–maxTable),
+// or 0 if all slots are occupied.
+func lowestFreeSlot(table map[byte][]byte) byte {
+	for s := byte(1); s <= maxTable; s++ {
+		if _, ok := table[s]; !ok {
+			return s
+		}
+	}
+	return 0
+}
+
 // tableSubstitute finds repeated substrings and replaces them with
-// single-byte references (0x01–0x19), returning the table + body.
+// single-byte references, always assigning the lowest free slot.
 func tableSubstitute(src []byte) []byte {
 	type candidate struct {
 		seq   string
@@ -113,10 +133,15 @@ func tableSubstitute(src []byte) []byte {
 	}
 
 	used := make(map[string]bool)
-	var table []string
+	table := make(map[byte]string)
 	data := string(src)
 
-	for len(table) < maxTable {
+	for {
+		slot := lowestFreeSlot(byteMapToCheck(table))
+		if slot == 0 {
+			break
+		}
+
 		var best candidate
 		for slen := 2; slen <= len(data); slen++ {
 			seen := make(map[string]int)
@@ -162,13 +187,13 @@ func tableSubstitute(src []byte) []byte {
 		if best.saves <= 0 {
 			break
 		}
-		table = append(table, best.seq)
+		table[slot] = best.seq
 		used[best.seq] = true
-		ref := string([]byte{byte(len(table))})
+		ref := slot
 		newData := make([]byte, 0, len(data))
 		for i := 0; i < len(data); {
 			if i+len(best.seq) <= len(data) && data[i:i+len(best.seq)] == best.seq {
-				newData = append(newData, ref[0])
+				newData = append(newData, ref)
 				i += len(best.seq)
 			} else {
 				newData = append(newData, data[i])
@@ -178,8 +203,13 @@ func tableSubstitute(src []byte) []byte {
 		data = string(newData)
 	}
 
+	// emit table entries in slot order
 	var out []byte
-	for _, seq := range table {
+	for s := byte(1); s <= maxTable; s++ {
+		seq, ok := table[s]
+		if !ok {
+			continue
+		}
 		out = append(out, 0x00)
 		out = append(out, []byte(seq)...)
 		out = append(out, 0x00)
@@ -188,40 +218,81 @@ func tableSubstitute(src []byte) []byte {
 	return out
 }
 
-// tableExpand parses the null-delimited table and expands references.
-func tableExpand(src []byte) ([]byte, error) {
-	var table [][]byte
-	i := 0
-	for i < len(src) && src[i] == 0x00 {
-		i++
-		start := i
-		for i < len(src) && src[i] != 0x00 {
-			i++
-		}
-		if i >= len(src) {
-			return nil, ErrUnterminatedSeq
-		}
-		entry := make([]byte, i-start)
-		copy(entry, src[start:i])
-		table = append(table, entry)
-		i++
-		if len(table) > maxTable {
-			return nil, ErrTooManyEntries
-		}
+// byteMapToCheck converts a map[byte]string to map[byte][]byte for
+// lowestFreeSlot compatibility.
+func byteMapToCheck(m map[byte]string) map[byte][]byte {
+	r := make(map[byte][]byte, len(m))
+	for k, v := range m {
+		r[k] = []byte(v)
 	}
+	return r
+}
 
+// tableExpand processes the intermediate stream: defines table entries
+// from null-delimited sequences, frees slots on unpaired null + ref,
+// and expands references.
+func tableExpand(src []byte) ([]byte, error) {
+	table := make(map[byte][]byte)
 	var out []byte
+	i := 0
 	for i < len(src) {
 		b := src[i]
 		switch {
+		case b == 0x00:
+			i++
+			if i >= len(src) {
+				return nil, ErrUnterminatedSeq
+			}
+			next := src[i]
+			// unpaired null + ref byte: free that slot
+			if next >= 0x01 && next <= maxTable {
+				if _, occupied := table[next]; occupied {
+					delete(table, next)
+					i++
+					continue
+				}
+			}
+			// paired null: define a new table entry
+			start := i
+			for i < len(src) && src[i] != 0x00 {
+				i++
+			}
+			if i >= len(src) {
+				return nil, ErrUnterminatedSeq
+			}
+			entry := make([]byte, i-start)
+			copy(entry, src[start:i])
+			slot := lowestFreeSlot(table)
+			if slot == 0 {
+				return nil, ErrTooManyEntries
+			}
+			table[slot] = entry
+			i++ // consume closing null
+
+		case b == delByte:
+			// DEL escape: next byte is a literal 8-bit value
+			i++
+			if i >= len(src) {
+				return nil, ErrTruncated
+			}
+			out = append(out, src[i])
+			i++
+
+		case b >= 0x01 && b <= maxTable:
+			entry, ok := table[b]
+			if !ok {
+				return nil, ErrBadRef
+			}
+			out = append(out, entry...)
+			i++
+
 		case b >= minGlyph && b <= maxGlyph:
 			out = append(out, b)
-		case b >= 0x01 && b <= maxTable && int(b) <= len(table):
-			out = append(out, table[b-1]...)
+			i++
+
 		default:
 			return nil, ErrBadRef
 		}
-		i++
 	}
 	return out, nil
 }
