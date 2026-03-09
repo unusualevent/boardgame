@@ -107,9 +107,17 @@ func nonOverlapCount(positions []int, length int) int {
 	return count
 }
 
+// lcpInterval tracks an open LCP interval on the stack during the
+// single-pass candidate scan.
+type lcpInterval struct {
+	length int // shared prefix length for this interval
+	start  int // SA index where this interval begins
+}
+
 // findBestCandidate searches for the repeated literal-only substring with
 // the highest savings score. It uses a suffix array and LCP array to
-// enumerate candidates efficiently.
+// enumerate candidates in a single O(n) pass via a stack-based LCP
+// interval decomposition, rather than iterating over all lengths.
 func findBestCandidate(data string, rc int, used map[string]bool) (string, int) {
 	runs := literalRuns(data)
 	if len(runs) == 0 {
@@ -121,52 +129,60 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 	}
 	lcp := buildLCP(data, sa, runEnd)
 
-	maxLCP := 0
-	for _, v := range lcp {
-		if v > maxLCP {
-			maxLCP = v
-		}
-	}
-	if maxLCP < 2 {
-		return "", 0
-	}
-
 	var bestSeq string
 	var bestSaves int
-	var scratch []int // reused across groups to avoid per-group allocation
+	var scratch []int // reused across evaluations
 
-	// For each candidate length L, walk the SA to find groups of suffixes
-	// sharing a prefix of length >= L.
-	for L := 2; L <= maxLCP; L++ {
-		i := 0
-		for i < len(sa) {
-			// Find the end of this group: consecutive SA entries with lcp >= L.
-			j := i + 1
-			for j < len(sa) && lcp[j] >= L {
-				j++
-			}
-			groupSize := j - i
-			if groupSize >= 2 {
-				pos := sa[i]
-				seq := data[pos : pos+L]
-				if !used[seq] {
-					// Reuse scratch buffer for sorted positions.
-					scratch = append(scratch[:0], sa[i:j]...)
-					sort.Ints(scratch)
-					nonoverlap := nonOverlapCount(scratch, L)
-
-					if nonoverlap >= 2 {
-						saves := nonoverlap*L - nonoverlap*rc - (L + 2)
-						if saves > bestSaves {
-							bestSaves = saves
-							bestSeq = seq
-						}
-					}
-				}
-			}
-			i = j
+	// evaluate scores a candidate interval [start, end) at the given length.
+	evaluate := func(length, start, end int) {
+		if length < 2 {
+			return
+		}
+		groupSize := end - start
+		if groupSize < 2 {
+			return
+		}
+		pos := sa[start]
+		seq := data[pos : pos+length]
+		if used[seq] {
+			return
+		}
+		scratch = append(scratch[:0], sa[start:end]...)
+		sort.Ints(scratch)
+		nonoverlap := nonOverlapCount(scratch, length)
+		if nonoverlap < 2 {
+			return
+		}
+		saves := nonoverlap*length - nonoverlap*rc - (length + 2)
+		if saves > bestSaves {
+			bestSaves = saves
+			bestSeq = seq
 		}
 	}
+
+	// Single-pass stack-based LCP interval scan. Each time an LCP value
+	// drops, we close all intervals with length > current LCP, evaluating
+	// them as candidates. This visits each SA entry exactly once.
+	var stack []lcpInterval
+	for i := 1; i < len(sa); i++ {
+		start := i - 1
+		for len(stack) > 0 && stack[len(stack)-1].length > lcp[i] {
+			top := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			evaluate(top.length, top.start, i)
+			start = top.start
+		}
+		if len(stack) == 0 || stack[len(stack)-1].length < lcp[i] {
+			stack = append(stack, lcpInterval{length: lcp[i], start: start})
+		}
+	}
+	// Flush remaining intervals.
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		evaluate(top.length, top.start, len(sa))
+	}
+
 	return bestSeq, bestSaves
 }
 
