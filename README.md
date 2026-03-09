@@ -15,7 +15,7 @@ using two complementary techniques:
 ## Install
 
 ```
-go get boardgame
+go get git.risottobias.org/claude/boardgame
 ```
 
 ## Quick start

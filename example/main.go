@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"boardgame"
+	"git.risottobias.org/claude/boardgame"
 )
 
 // isText reports whether data looks like a text file by checking for null

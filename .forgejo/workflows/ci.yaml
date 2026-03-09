@@ -22,3 +22,11 @@ jobs:
 
       - name: Fuzz
         run: go test -fuzz=. -fuzztime=30s ./...
+
+      - name: Benchmark
+        run: go test -bench=. -benchmem -count=5 ./... | tee bench.txt
+
+      - name: Benchstat
+        run: |
+          go install golang.org/x/perf/cmd/benchstat@latest
+          benchstat bench.txt

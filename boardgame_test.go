@@ -103,13 +103,13 @@ func TestSlotFreeAndReuse(t *testing.T) {
 }
 
 func TestLowestFreeSlot(t *testing.T) {
-	table := make(map[byte][]byte)
+	table := make(map[byte]string)
 	// first slot should be 1
 	if s := lowestFreeSlot(table); s != 1 {
 		t.Errorf("empty table: got slot %d, want 1", s)
 	}
-	table[1] = []byte("a")
-	table[2] = []byte("b")
+	table[1] = "a"
+	table[2] = "b"
 	if s := lowestFreeSlot(table); s != 3 {
 		t.Errorf("slots 1,2 taken: got slot %d, want 3", s)
 	}

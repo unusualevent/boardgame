@@ -1,7 +1,7 @@
 # API Reference
 
 ```
-import "boardgame"
+import "git.risottobias.org/claude/boardgame"
 ```
 
 ## Functions
@@ -34,6 +34,25 @@ func Stats(original, compressed []byte) (origLen, compLen int, ratio float64)
 
 Returns the original length, compressed length, and compression ratio
 (0.0 = no savings, 1.0 = fully eliminated). Useful for diagnostics.
+
+### NewWriter
+
+```go
+func NewWriter(w io.Writer) *Writer
+```
+
+Returns a writer that buffers data and compresses it on `Close`.
+Implements `io.WriteCloser`.
+
+### NewReader
+
+```go
+func NewReader(r io.Reader) *Reader
+```
+
+Returns a reader that decompresses boardgame-encoded data from `r`.
+The entire compressed input is read and decompressed on the first
+`Read` call. Implements `io.Reader`.
 
 ## Errors
 
