@@ -1,20 +1,6 @@
 package boardgame
 
-import (
-	"sort"
-	"sync"
-)
-
-// minSavings is the minimum byte savings a candidate must provide to be
-// worth adding to the table. This enables early termination when the
-// greedy search reaches diminishing returns.
-const minSavings = 3
-
-// posPool reuses position slices for non-overlap counting, reducing
-// allocations during the greedy candidate search.
-var posPool = sync.Pool{
-	New: func() any { return make([]int, 0, 64) },
-}
+import "sort"
 
 // lowestFreeSlot returns the lowest unused slot number (1–0xFF),
 // or 0 if all 255 slots are occupied. Slots reserved for literal
@@ -163,13 +149,11 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 				pos := sa[i]
 				seq := data[pos : pos+L]
 				if !used[seq] {
-					// Borrow a position slice from the pool.
-					sorted := posPool.Get().([]int)
-					sorted = sorted[:0]
-					sorted = append(sorted, sa[i:j]...)
+					// Collect and sort positions for non-overlap counting.
+					sorted := make([]int, groupSize)
+					copy(sorted, sa[i:j])
 					sort.Ints(sorted)
 					nonoverlap := nonOverlapCount(sorted, L)
-					posPool.Put(sorted)
 
 					if nonoverlap >= 2 {
 						saves := nonoverlap*L - nonoverlap*rc - (L + 2)
@@ -203,7 +187,7 @@ func tableSubstitute(src []byte) []byte {
 		rc := refCost(slot)
 
 		bestSeq, bestSaves := findBestCandidate(data, rc, used)
-		if bestSaves < minSavings {
+		if bestSaves <= 0 {
 			break
 		}
 		table[slot] = bestSeq
