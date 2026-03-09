@@ -68,16 +68,16 @@ Encoding throughput on an Intel i7-8700 @ 3.20GHz:
 
 | Benchmark | Size | Throughput | Allocs/op |
 |---|---|---|---|
-| Encode 100B | 100 B | 12.5 MB/s | 22 |
-| Encode 1KB | 1 KB | 0.18 MB/s | 46K |
-| Encode 4KB | 4 KB | 0.04 MB/s | 553K |
-| Encode 16KB | 16 KB | 0.01 MB/s | 2.6M |
-| Decode 1KB | 1 KB | 199 MB/s | 13 |
-| Decode 16KB | 16 KB | 868 MB/s | 22 |
+| Encode 100B | 100 B | 12.5 MB/s | 64 |
+| Encode 1KB | 1 KB | 1.14 MB/s | 126 |
+| Encode 4KB | 4 KB | 0.15 MB/s | 349 |
+| Encode 16KB | 16 KB | 0.02 MB/s | 147 |
+| Decode 1KB | 1 KB | 236 MB/s | 15 |
+| Decode 16KB | 16 KB | 938 MB/s | 24 |
 | Pack7 4KB | 4 KB | 39 MB/s | 14 |
-| Unpack7 4KB | 4 KB | 60 MB/s | 12 |
+| Unpack7 4KB | 4 KB | 63 MB/s | 12 |
 
-Decoding is ~5000x faster than encoding. The encoder is CPU-bound in the
+Decoding is ~4000x faster than encoding. The encoder is CPU-bound in the
 suffix-array-based candidate search; the decoder and 7-bit packing layers
 are fast.
 
@@ -88,60 +88,60 @@ Measured across a mixed-language monorepo (~1300 text files, files <= 20KB):
 ```
 Avg Compression Time vs Avg File Size (sorted by size)
 ================================================================================
-.tab                 3B | ###                                      3us
-.jpg                15B | ######                                   8us
-.png                16B | ####                                     5us
-.gitattributes      19B | #######                                  13us
-.mf                 25B | #######                                  12us
-.tfvars             25B | ########                                 17us
-.timestamp          48B | ########                                 17us
-.list               62B | ##########                               34us
-.dockerignore       71B | ###############                          159us
-.bin                99B | ############                             58us
-.pub               146B | #############                            74us
-.properties        156B | #################                        294us
-.tag               177B | ##############                           97us
-.tfstate           182B | ###############                          167us
-.gitignore         182B | ##################                       467us
-.editorconfig      216B | ###################                      591us
-.expr              216B | #################                        255us
-.backend           229B | ########################                 2.5ms
-.conf              229B | ###################                      623us
-.example           276B | #####################                    1.0ms
-.service           334B | ####################                     838us
-.cfg               378B | #######################                  2.0ms
-.pro               384B | #########################                3.7ms
-.j2                417B | #######################                  1.9ms
-.json              423B | ########################                 2.4ms
-.toml              560B | #########################                3.4ms
-.tf                610B | #########################                3.4ms
-.mod               634B | #########################                3.7ms
-.yml               680B | ##########################               5.0ms
-.kts               817B | ##########################               5.9ms
-.code-workspace     926B | ######################                   1.5ms
-.yaml              928B | ##########################               5.0ms
-.xml               938B | ###########################              7.4ms
-.svg              1.0KB | ############################             8.8ms
-.ts               1.1KB | ##############################           22.4ms
-.d                1.2KB | ############################             10.1ms
-.hcl              1.3KB | #############################            15.2ms
-.rego             1.3KB | ###########################              7.3ms
-.html             1.4KB | ##############################           17.4ms
-.sh               1.9KB | ################################         32.4ms
-.js               2.1KB | ################################         32.4ms
-.rs               2.5KB | ###############################          25.5ms
-.mjs              2.8KB | ##################################       63.0ms
-.md               3.3KB | ##################################       60.5ms
-.kt               3.5KB | ################################         42.0ms
-.txt              3.8KB | #################################        48.3ms
-.lock             3.8KB | ###############################          28.0ms
-.bat              4.1KB | ###################################      91.6ms
-.css              4.1KB | ###################################      104.6ms
-.sum              4.1KB | ##################################       68.1ms
-.go               4.8KB | ####################################     133.9ms
-.vue              5.3KB | ####################################     151.9ms
-.rb               5.6KB | ###################################      99.0ms
-.java            16.5KB | ######################################## 418.1ms
+.tab                 3B | ######                                   6us
+.jpg                15B | #####                                    5us
+.png                16B | ######                                   6us
+.gitattributes      19B | ########                                 11us
+.mf                 25B | ######                                   7us
+.tfvars             25B | #########                                15us
+.timestamp          48B | ########                                 11us
+.list               62B | ###########                              28us
+.dockerignore       71B | #############                            51us
+.bin                99B | ##################                       224us
+.pub               146B | #############                            60us
+.properties        156B | ###############                          89us
+.tag               177B | #############                            62us
+.tfstate           182B | ################                         142us
+.gitignore         182B | ####################                     419us
+.editorconfig      216B | ########################                 1.6ms
+.expr              216B | ################                         146us
+.backend           229B | ###################                      288us
+.conf              229B | ####################                     405us
+.example           276B | ####################                     482us
+.service           334B | ###################                      372us
+.cfg               378B | ######################                   742us
+.pro               384B | ########################                 1.7ms
+.j2                417B | #######################                  1.0ms
+.json              424B | #######################                  1.3ms
+.toml              560B | #########################                1.9ms
+.tf                610B | #######################                  1.2ms
+.mod               634B | #########################                1.8ms
+.yml               680B | #########################                2.1ms
+.kts               817B | ###########################              3.5ms
+.code-workspace     926B | #####################                    669us
+.yaml              933B | #########################                2.1ms
+.xml               938B | ##########################               2.9ms
+.svg              1.0KB | ###########################              4.1ms
+.ts               1.1KB | ###############################          10.6ms
+.d                1.2KB | #########################                1.8ms
+.hcl              1.3KB | ##############################           8.3ms
+.rego             1.3KB | ###########################              3.5ms
+.html             1.4KB | ##############################           9.3ms
+.sh               1.9KB | ################################         18.0ms
+.rs               2.0KB | #############################            6.4ms
+.js               2.1KB | ################################         15.7ms
+.mjs              2.8KB | ##################################       26.2ms
+.md               3.3KB | ##################################       32.5ms
+.kt               3.5KB | #################################        18.8ms
+.lock             3.8KB | ###############################          13.1ms
+.bat              4.1KB | ###################################      38.4ms
+.css              4.1KB | ####################################     48.2ms
+.sum              4.1KB | ##################################       32.4ms
+.txt              4.8KB | ###################################      39.3ms
+.go               4.8KB | ####################################     58.3ms
+.vue              5.3KB | #####################################    73.4ms
+.rb               5.6KB | ####################################     53.9ms
+.java            16.5KB | ######################################## 150.2ms
 
 Avg Compression Ratio vs Avg File Size (sorted by size)
 ================================================================================
@@ -165,61 +165,45 @@ Avg Compression Ratio vs Avg File Size (sorted by size)
 .backend           229B | ##########                               27.1%
 .conf              229B | ##########                               27.0%
 .example           276B | #######                                  19.2%
-.service           334B | ########                                 21.8%
+.service           334B | ########                                 21.7%
 .cfg               378B | #########                                24.3%
 .pro               384B | ############                             32.3%
 .j2                417B | ################                         40.2%
-.json              423B | ############                             30.8%
-.toml              560B | #############                            33.2%
-.tf                610B | ###############                          38.9%
-.mod               634B | ############                             30.0%
+.json              424B | ############                             30.9%
+.toml              560B | #############                            33.7%
+.tf                610B | ###############                          38.7%
+.mod               634B | ############                             30.1%
 .yml               680B | ##############                           35.7%
-.kts               817B | ################                         40.3%
+.kts               817B | ################                         40.2%
 .code-workspace     926B | #########################                64.3%
-.yaml              928B | ######################                   57.1%
+.yaml              933B | ######################                   57.1%
 .xml               938B | #################                        43.5%
 .svg              1.0KB | #############                            33.8%
 .ts               1.1KB | ###############                          37.6%
 .d                1.2KB | #############################            74.1%
 .hcl              1.3KB | #########                                23.4%
 .rego             1.3KB | #######################                  58.1%
-.html             1.4KB | ##############                           36.5%
+.html             1.4KB | ##############                           36.6%
 .sh               1.9KB | #############                            33.4%
-.js               2.1KB | #################                        45.0%
-.rs               2.5KB | ####################                     51.3%
+.rs               2.0KB | #################                        42.8%
+.js               2.1KB | #################                        44.9%
 .mjs              2.8KB | ##################                       46.3%
-.md               3.3KB | #############                            33.3%
+.md               3.3KB | #############                            33.4%
 .kt               3.5KB | ######################                   56.3%
-.txt              3.8KB | ##########                               26.7%
 .lock             3.8KB | ########################                 61.2%
 .bat              4.1KB | #################                        44.4%
 .css              4.1KB | ###################                      47.6%
 .sum              4.1KB | ##############                           36.3%
-.go               4.8KB | ###################                      48.4%
-.vue              5.3KB | ################                         41.7%
-.rb               5.6KB | #####################                    53.7%
-.java            16.5KB | ##############################           75.0%
+.txt              4.8KB | ##########                               26.7%
+.go               4.8KB | ###################                      48.3%
+.vue              5.3KB | ################                         41.8%
+.rb               5.6KB | #####################                    53.8%
+.java            16.5KB | ##############################           75.1%
 ```
 
-Overall: **39.8% average compression** across 1325 files. Compression time
+Overall: **39.8% average compression** across 1332 files. Compression time
 scales superlinearly with file size; ratio improves with size as larger
 files contain more repeated patterns.
-
-### Future optimization
-
-The encoder rebuilds the suffix array from scratch on each greedy
-iteration (up to 255 rounds). The `buildSA` function currently uses
-`sort.Slice`, which allocates comparison closures and is O(m log m) per
-call. This accounts for most of the 553K allocations at 4KB. Possible
-improvements:
-
-- **Reuse the suffix array** across iterations instead of rebuilding,
-  updating it incrementally as substitutions replace substrings with
-  reference bytes.
-- **Use SA-IS or DC3/skew** algorithms for O(n) suffix array construction
-  instead of comparison-based sorting.
-- **Pool allocations** for the SA, LCP, and position slices to reduce GC
-  pressure.
 
 ## Testing
 
