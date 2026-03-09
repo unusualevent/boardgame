@@ -114,6 +114,75 @@ func TestLowestFreeSlot(t *testing.T) {
 	}
 }
 
+func TestExtendedRef(t *testing.T) {
+	// Build intermediate stream with an extended reference (slot 0xF0)
+	// Manually fill direct slots 1–25, then define one more entry
+	// which must land in slot 0x1A and be referenced via null-DEL-byte.
+	intermediate := make([]byte, 0)
+
+	// define 25 entries in direct slots
+	for s := byte(1); s <= maxDirectRef; s++ {
+		seq := []byte{minGlyph + s, minGlyph + s}
+		intermediate = append(intermediate, 0x00)
+		intermediate = append(intermediate, seq...)
+		intermediate = append(intermediate, 0x00)
+	}
+	// define 26th entry → slot 0x1A
+	intermediate = append(intermediate, 0x00, 'h', 'i', 0x00)
+	// reference it via null-DEL-0x1A
+	intermediate = append(intermediate, 0x00, delByte, 0x1A)
+
+	got, err := tableExpand(intermediate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, []byte("hi")) {
+		t.Errorf("extended ref: got %q, want %q", got, "hi")
+	}
+}
+
+func TestExtendedRefManual(t *testing.T) {
+	// Test null-DEL-byte with an arbitrary slot like 0xF0
+	intermediate := []byte{
+		0x00, 'a', 'b', 0x00, // slot 1 = "ab"
+	}
+	// fill slots 2–25
+	for s := byte(2); s <= maxDirectRef; s++ {
+		intermediate = append(intermediate, 0x00, minGlyph+s, minGlyph+s, 0x00)
+	}
+	// slots 0x1A through 0xEF
+	for s := byte(0x1A); s <= 0xEF; s++ {
+		intermediate = append(intermediate, 0x00, minGlyph+(s%84), minGlyph+((s+1)%84), 0x00)
+	}
+	// slot 0xF0 = "cd"
+	intermediate = append(intermediate, 0x00, 'c', 'd', 0x00)
+	// direct ref slot 1, then extended ref slot 0xF0
+	intermediate = append(intermediate, 0x01, 0x00, delByte, 0xF0)
+
+	got, err := tableExpand(intermediate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, []byte("abcd")) {
+		t.Errorf("extended ref 0xF0: got %q, want %q", got, "abcd")
+	}
+}
+
+func TestRefCost(t *testing.T) {
+	if rc := refCost(0x01); rc != 1 {
+		t.Errorf("refCost(0x01) = %d, want 1", rc)
+	}
+	if rc := refCost(maxDirectRef); rc != 1 {
+		t.Errorf("refCost(0x19) = %d, want 1", rc)
+	}
+	if rc := refCost(0x1A); rc != 3 {
+		t.Errorf("refCost(0x1A) = %d, want 3", rc)
+	}
+	if rc := refCost(0xF0); rc != 3 {
+		t.Errorf("refCost(0xF0) = %d, want 3", rc)
+	}
+}
+
 func TestDecodeErrors(t *testing.T) {
 	// bad reference in unpacked stream
 	bad := pack7([]byte{0x05})
