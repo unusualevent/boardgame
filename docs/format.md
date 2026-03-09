@@ -8,10 +8,12 @@ followed by 7-bit packing.
 | Range       | Meaning                          |
 |-------------|----------------------------------|
 | `0x00`      | Table entry delimiter / command  |
-| `0x01–0x19` | Direct table reference (1 byte)  |
-| `0x1A–0x1F` | Reserved                         |
-| `0x20–0x73` | Literal ASCII glyphs             |
-| `0x74–0x7E` | Reserved                         |
+| `0x01–0x08` | Direct table reference (1 byte)  |
+| `0x09`      | Literal tab                      |
+| `0x0A`      | Literal newline                  |
+| `0x0B–0x19` | Direct table reference (1 byte)  |
+| `0x1A–0x1F` | Reserved (extended ref range)    |
+| `0x20–0x7E` | Literal ASCII glyphs             |
 | `0x7F`      | DEL — escape byte                |
 | `0x80–0xFF` | Only inside DEL-escaped values   |
 

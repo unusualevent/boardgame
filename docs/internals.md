@@ -20,7 +20,7 @@ A greedy algorithm that iteratively finds the best repeated substring to
 replace:
 
 1. Find the lowest free slot (1–255).
-2. For every substring length 2..n, count non-overlapping occurrences.
+2. Find the best candidate substring using suffix-array-based search.
 3. Score each candidate:
    `saves = occurrences * len(seq) - occurrences * refCost(slot) - (len(seq) + 2)`
 4. Pick the candidate with the highest positive savings.
@@ -34,6 +34,35 @@ Slots 0x01–0x19 use a 1-byte reference; slots 0x1A–0xFF use a 3-byte
 `{0x00}{0x7F}{slot}` reference, so the savings threshold is higher for
 extended slots.
 
+### Candidate search via suffix array
+
+The candidate search (step 2) uses a suffix array built over only the
+literal-byte positions in the intermediate stream. Non-literal bytes
+(existing references from prior rounds) act as hard boundaries that
+candidates cannot span.
+
+Helper functions:
+
+- **`literalRuns`** — O(n) scan to identify contiguous runs of literal
+  bytes (printable ASCII, tab, newline). Only runs of length >= 2 can
+  contain candidates.
+- **`buildSA`** — builds a suffix array over literal-run positions,
+  sorted lexicographically with run boundaries acting as terminators.
+  O(m log m) via `sort.Slice`.
+- **`buildLCP`** — computes the longest common prefix array for adjacent
+  suffix array entries, clamped to run boundaries. O(m) per pair.
+- **`nonOverlapCount`** — greedy left-to-right non-overlapping count
+  from sorted positions. O(k) where k = group size.
+- **`findBestCandidate`** — for each candidate length L from 2 to
+  maxLCP, walks the suffix array to identify groups of suffixes sharing
+  a prefix of length >= L, scores each group, and tracks the global
+  best. Overall O(maxLCP * m) per greedy iteration.
+
+This replaces the original O(n^3) brute-force search with an
+O(m log m + maxLCP * m) search per iteration, where m is the number of
+literal positions (shrinks each round) and maxLCP is the longest repeated
+literal-only prefix (typically small for source code).
+
 ## Table expansion (`tableExpand`)
 
 Processes the intermediate stream byte by byte. A `0x00` byte triggers
@@ -43,7 +72,7 @@ one of three actions depending on the next byte:
 - `0x01–0x19` (occupied) → free that slot
 - anything else → start of a new table entry, scan to closing `0x00`
 
-Direct references (`0x01–0x19`) and literals (`0x20–0x73`) are handled
+Direct references (`0x01–0x19`) and literals (`0x20–0x7E`) are handled
 inline. Standalone `0x7F` passes the next byte through as a literal.
 
 ## 7-bit packing (`pack7` / `unpack7`)

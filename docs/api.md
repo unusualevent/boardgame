@@ -13,7 +13,7 @@ func Encode(src []byte) ([]byte, error)
 ```
 
 Compresses `src` using table substitution and 7-bit packing. All input
-bytes must be in the glyph range `0x20–0x73`; returns `ErrByteOutOfRange`
+bytes must be in the glyph range `0x20–0x7E` plus tab (`0x09`) and newline (`0x0A`); returns `ErrByteOutOfRange`
 otherwise.
 
 ### Decode
@@ -40,7 +40,7 @@ Returns the original length, compressed length, and compression ratio
 | `ErrTooManyEntries`  | More than 255 table entries defined                  |
 | `ErrUnterminatedSeq` | Table entry missing its closing `0x00`               |
 | `ErrBadRef`          | Reference to an undefined or out-of-range table slot |
-| `ErrByteOutOfRange`  | Input byte outside the valid glyph range `0x20–0x73` |
+| `ErrByteOutOfRange`  | Input byte outside the valid glyph range `0x20–0x7E` plus tab (`0x09`) and newline (`0x0A`) |
 | `ErrTruncated`       | Bitstream ended mid-value (e.g. after a DEL escape)  |
 | `ErrNoFreeSlot`      | All 255 table slots are occupied                     |
 

@@ -2,7 +2,7 @@
 
 ASCII source code compression library in Go.
 
-Boardgame compresses text in the printable ASCII range (`0x20`–`0x73`)
+Boardgame compresses text in the printable ASCII range (`0x20`–`0x7E`)
 using two complementary techniques:
 
 1. **Table substitution** — repeated sequences are stored in a
@@ -33,8 +33,19 @@ restored, err := boardgame.Decode(compressed)
 | `Decode(src []byte) ([]byte, error)` | Decompress encoded bytes |
 | `Stats(orig, comp []byte) (int, int, float64)` | Original size, compressed size, ratio |
 
-Input must be in the glyph range `0x20`–`0x73`. See [docs/api.md](docs/api.md)
-for full details.
+Input must be printable ASCII (`0x20`–`0x7E`) plus tab (`0x09`) and newline
+(`0x0A`). See [docs/api.md](docs/api.md) for full details.
+
+## Example
+
+The `example/` directory contains a CLI tool that walks a directory tree,
+compresses each text source file, and reports per-extension compression
+ratios, timing, and ASCII histograms. See [example/README.md](example/README.md).
+
+```
+go run ./example /path/to/project
+go run ./example -exclude testdata -max-size 0 /path/to/project
+```
 
 ## Documentation
 
