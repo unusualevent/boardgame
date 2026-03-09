@@ -14,6 +14,7 @@ package boardgame
 
 import (
 	"errors"
+	"sort"
 )
 
 const (
@@ -153,6 +154,158 @@ func lowestFreeSlot(table map[byte][]byte) byte {
 	return 0
 }
 
+// literalRuns returns [start, end) pairs of maximal contiguous runs of
+// isLiteral bytes in data. Only runs of length >= 2 are included.
+func literalRuns(data string) [][2]int {
+	var runs [][2]int
+	i := 0
+	for i < len(data) {
+		if !isLiteral(data[i]) {
+			i++
+			continue
+		}
+		start := i
+		for i < len(data) && isLiteral(data[i]) {
+			i++
+		}
+		if i-start >= 2 {
+			runs = append(runs, [2]int{start, i})
+		}
+	}
+	return runs
+}
+
+// buildSA builds a suffix array over only the literal-run positions in data.
+// It also returns runEnd where runEnd[i] is the end of i's literal run
+// (or 0 if i is not in a run). Suffixes are compared only up to their run
+// boundary, so substrings never span across non-literal bytes.
+func buildSA(data string, runs [][2]int) ([]int, []int) {
+	runEnd := make([]int, len(data))
+	var sa []int
+	for _, r := range runs {
+		for i := r[0]; i < r[1]; i++ {
+			runEnd[i] = r[1]
+			sa = append(sa, i)
+		}
+	}
+	sort.Slice(sa, func(a, b int) bool {
+		ai, bi := sa[a], sa[b]
+		ae, be := runEnd[ai], runEnd[bi]
+		la, lb := ae-ai, be-bi
+		ml := la
+		if lb < ml {
+			ml = lb
+		}
+		for k := 0; k < ml; k++ {
+			if data[ai+k] != data[bi+k] {
+				return data[ai+k] < data[bi+k]
+			}
+		}
+		return la < lb
+	})
+	return sa, runEnd
+}
+
+// buildLCP computes the LCP array for adjacent SA entries, clamped to
+// literal-run boundaries via runEnd.
+func buildLCP(data string, sa []int, runEnd []int) []int {
+	n := len(sa)
+	if n == 0 {
+		return nil
+	}
+	lcp := make([]int, n)
+	for i := 1; i < n; i++ {
+		a, b := sa[i-1], sa[i]
+		maxA, maxB := runEnd[a]-a, runEnd[b]-b
+		ml := maxA
+		if maxB < ml {
+			ml = maxB
+		}
+		h := 0
+		for h < ml && data[a+h] == data[b+h] {
+			h++
+		}
+		lcp[i] = h
+	}
+	return lcp
+}
+
+// nonOverlapCount returns the greedy left-to-right non-overlapping count
+// of a substring of the given length at the given sorted positions.
+func nonOverlapCount(positions []int, length int) int {
+	count := 0
+	barrier := -1
+	for _, p := range positions {
+		if p >= barrier {
+			count++
+			barrier = p + length
+		}
+	}
+	return count
+}
+
+// findBestCandidate searches for the repeated literal-only substring with
+// the highest savings score. It uses a suffix array and LCP array to
+// enumerate candidates efficiently.
+func findBestCandidate(data string, rc int, used map[string]bool) (string, int) {
+	runs := literalRuns(data)
+	if len(runs) == 0 {
+		return "", 0
+	}
+	sa, runEnd := buildSA(data, runs)
+	if len(sa) < 2 {
+		return "", 0
+	}
+	lcp := buildLCP(data, sa, runEnd)
+
+	maxLCP := 0
+	for _, v := range lcp {
+		if v > maxLCP {
+			maxLCP = v
+		}
+	}
+	if maxLCP < 2 {
+		return "", 0
+	}
+
+	var bestSeq string
+	var bestSaves int
+
+	// For each candidate length L, walk the SA to find groups of suffixes
+	// sharing a prefix of length >= L.
+	for L := 2; L <= maxLCP; L++ {
+		i := 0
+		for i < len(sa) {
+			// Find the end of this group: consecutive SA entries with lcp >= L.
+			j := i + 1
+			for j < len(sa) && lcp[j] >= L {
+				j++
+			}
+			groupSize := j - i
+			if groupSize >= 2 {
+				pos := sa[i]
+				seq := data[pos : pos+L]
+				if !used[seq] {
+					// Collect and sort positions for non-overlap counting.
+					sorted := make([]int, groupSize)
+					copy(sorted, sa[i:j])
+					sort.Ints(sorted)
+					nonoverlap := nonOverlapCount(sorted, L)
+					if nonoverlap >= 2 {
+						saves := nonoverlap*L - nonoverlap*rc - (L + 2)
+						if saves > bestSaves {
+							bestSaves = saves
+							bestSeq = seq
+						}
+					}
+				}
+			}
+			i = j
+		}
+	}
+	return bestSeq, bestSaves
+}
+
 // tableSubstitute finds repeated substrings and replaces them with
 // references, always assigning the lowest free slot. Direct slots
 // (0x01–0x19) use a single-byte ref; extended slots (0x1A–0xFF)
@@ -174,49 +327,8 @@ func tableSubstitute(src []byte) []byte {
 		}
 		rc := refCost(slot)
 
-		var best candidate
-		for slen := 2; slen <= len(data); slen++ {
-			seen := make(map[string]int)
-			for i := 0; i <= len(data)-slen; i++ {
-				s := data[i : i+slen]
-				if used[s] {
-					continue
-				}
-				valid := true
-				for j := 0; j < len(s); j++ {
-					if !isLiteral(s[j]) {
-						valid = false
-						break
-					}
-				}
-				if !valid {
-					continue
-				}
-				seen[s]++
-			}
-			for s, count := range seen {
-				if count < 2 {
-					continue
-				}
-				nonoverlap := 0
-				for i := 0; i <= len(data)-len(s); {
-					if data[i:i+len(s)] == s {
-						nonoverlap++
-						i += len(s)
-					} else {
-						i++
-					}
-				}
-				if nonoverlap < 2 {
-					continue
-				}
-				// each ref costs rc bytes; table definition costs len(s)+2
-				saves := nonoverlap*len(s) - nonoverlap*rc - (len(s) + 2)
-				if saves > best.saves {
-					best = candidate{seq: s, saves: saves}
-				}
-			}
-		}
+		bestSeq, bestSaves := findBestCandidate(data, rc, used)
+		best := candidate{seq: bestSeq, saves: bestSaves}
 		if best.saves <= 0 {
 			break
 		}
