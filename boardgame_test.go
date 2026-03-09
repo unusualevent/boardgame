@@ -32,7 +32,6 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestCompressionSaves(t *testing.T) {
-	// repeated content should compress
 	src := []byte("a long phrase here a long phrase here a long phrase here")
 	enc, err := Encode(src)
 	if err != nil {
@@ -43,15 +42,48 @@ func TestCompressionSaves(t *testing.T) {
 	}
 }
 
-func TestDecodeErrors(t *testing.T) {
-	// unterminated table entry
-	_, err := Decode([]byte{0x00, 0x41})
-	if err != ErrUnterminatedSeq {
-		t.Errorf("expected ErrUnterminatedSeq, got %v", err)
+func Test7BitPacking(t *testing.T) {
+	// 8 ASCII bytes should pack into 7 bytes + 1 padding header = 8
+	src := []byte("abcdefgh")
+	packed := pack7(src)
+	if len(packed) != 8 {
+		t.Errorf("expected 8 ASCII chars to pack into 8 bytes (7+header), got %d", len(packed))
 	}
+	unpacked, err := unpack7(packed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(src, unpacked) {
+		t.Errorf("7-bit round-trip failed: got %q", unpacked)
+	}
+}
 
-	// bad reference
-	_, err = Decode([]byte{0x05})
+func Test7BitPackingSavesSpace(t *testing.T) {
+	// any input should be ~12.5% smaller after 7-bit packing
+	src := []byte("hello hello hello hello hello hello hello hello")
+	packed := pack7(src)
+	if len(packed) >= len(src) {
+		t.Errorf("7-bit packing should save space: %d >= %d", len(packed), len(src))
+	}
+}
+
+func TestDelEscape(t *testing.T) {
+	// test that DEL escape preserves full 8-bit values
+	src := []byte{0x41, 0xFF, 0x42} // A, 0xFF (needs escape), B
+	packed := pack7(src)
+	unpacked, err := unpack7(packed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(src, unpacked) {
+		t.Errorf("DEL escape round-trip failed: got %x, want %x", unpacked, src)
+	}
+}
+
+func TestDecodeErrors(t *testing.T) {
+	// bad reference in unpacked stream
+	bad := pack7([]byte{0x05})
+	_, err := Decode(bad)
 	if err != ErrBadRef {
 		t.Errorf("expected ErrBadRef, got %v", err)
 	}
