@@ -133,6 +133,7 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 
 	var bestSeq string
 	var bestSaves int
+	var scratch []int // reused across groups to avoid per-group allocation
 
 	// For each candidate length L, walk the SA to find groups of suffixes
 	// sharing a prefix of length >= L.
@@ -149,11 +150,10 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 				pos := sa[i]
 				seq := data[pos : pos+L]
 				if !used[seq] {
-					// Collect and sort positions for non-overlap counting.
-					sorted := make([]int, groupSize)
-					copy(sorted, sa[i:j])
-					sort.Ints(sorted)
-					nonoverlap := nonOverlapCount(sorted, L)
+					// Reuse scratch buffer for sorted positions.
+					scratch = append(scratch[:0], sa[i:j]...)
+					sort.Ints(scratch)
+					nonoverlap := nonOverlapCount(scratch, L)
 
 					if nonoverlap >= 2 {
 						saves := nonoverlap*L - nonoverlap*rc - (L + 2)
