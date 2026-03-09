@@ -26,23 +26,16 @@ import (
 	"boardgame"
 )
 
-// isText reports whether data looks like a text file by scanning for
-// null bytes and checking that all bytes are valid ASCII text characters
-// (printable ASCII, tabs, newlines, carriage returns).
+// isText reports whether data looks like a text file by checking for null
+// bytes in the first 8KB — the same heuristic Git uses. Files with valid
+// UTF-8 (em dashes, accented characters, etc.) are correctly identified as
+// text; the boardgame library handles non-ASCII via DEL escaping.
 func isText(data []byte) bool {
 	check := data
 	if len(check) > 8192 {
 		check = check[:8192]
 	}
-	if bytes.ContainsRune(check, 0) {
-		return false
-	}
-	for _, b := range check {
-		if b > 0x7E && b != 0x0D {
-			return false
-		}
-	}
-	return true
+	return !bytes.ContainsRune(check, 0)
 }
 
 type fileJob struct {
