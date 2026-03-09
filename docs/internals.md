@@ -5,7 +5,7 @@ This document describes the internal architecture of the boardgame codec.
 ## Compression pipeline
 
 ```
-Source bytes ──► escapeNonLiteral ──► tableSubstitute ──► intermediate stream ──► pack7 ──► compressed output
+Source bytes ──► escapeNonLiteral ──► rleCompress ──► tableSubstitute ──► intermediate stream ──► pack7 ──► compressed output
 ```
 
 ### Non-ASCII escaping (`escapeNonLiteral`)
@@ -18,10 +18,24 @@ not participate in dictionary compression — but round-trip correctly
 through the rest of the pipeline since `pack7`, `unpack7`, and
 `tableExpand` all handle DEL escapes natively.
 
+### RLE preprocessing (`rleCompress`)
+
+Runs of 4–15 consecutive spaces or tabs are collapsed to 2-byte tokens:
+`{marker, count_byte}`. The space marker is `0x1F`, the tab marker is
+`0x1E`. The count byte maps run lengths 4–15 to non-literal bytes
+`0x0B–0x16` via `count_byte = run_length - 4 + 0x0B`. Both bytes are
+non-literal, so they act as barriers in `literalRuns` and the suffix
+array candidate search. Runs longer than 15 are split into multiple
+RLE pairs plus remaining literal characters.
+
+This shrinks the input before it reaches the suffix array, reducing
+encode time (1.05x overall, up to 1.22x on whitespace-heavy files)
+and freeing table slots for higher-value patterns (+0.3% ratio).
+
 ## Decompression pipeline
 
 ```
-Compressed input ──► unpack7 ──► intermediate stream ──► tableExpand ──► source bytes
+Compressed input ──► unpack7 ──► intermediate stream ──► tableExpand ──► rleExpand ──► source bytes
 ```
 
 ## Table substitution (`tableSubstitute`)
@@ -40,7 +54,7 @@ replace:
    full.
 
 The output is the table definitions followed by the substituted body.
-Slots 0x01–0x19 use a 1-byte reference; slots 0x1A–0xFF use a 3-byte
+Slots 0x01–0x1D use a 1-byte reference; slots 0x1E–0xFF use a 3-byte
 `{0x00}{0x7F}{slot}` reference, so the savings threshold is higher for
 extended slots.
 
@@ -63,15 +77,14 @@ Helper functions:
   suffix array entries, clamped to run boundaries. O(m) per pair.
 - **`nonOverlapCount`** — greedy left-to-right non-overlapping count
   from sorted positions. O(k) where k = group size.
-- **`findBestCandidate`** — for each candidate length L from 2 to
-  maxLCP, walks the suffix array to identify groups of suffixes sharing
-  a prefix of length >= L, scores each group, and tracks the global
-  best. Overall O(maxLCP * m) per greedy iteration.
+- **`findBestCandidate`** — uses a single-pass stack-based LCP interval
+  decomposition to enumerate all candidate substrings in O(m) time.
+  Each time an LCP value drops, intervals with longer shared prefixes
+  are closed and evaluated as candidates.
 
 This replaces the original O(n^3) brute-force search with an
-O(m log m + maxLCP * m) search per iteration, where m is the number of
-literal positions (shrinks each round) and maxLCP is the longest repeated
-literal-only prefix (typically small for source code).
+O(m log m) search per iteration (dominated by the SA sort), where m
+is the number of literal positions (shrinks each round).
 
 ## Table expansion (`tableExpand`)
 
@@ -79,11 +92,13 @@ Processes the intermediate stream byte by byte. A `0x00` byte triggers
 one of three actions depending on the next byte:
 
 - `0x7F` → extended reference: read one more byte as the slot ID
-- `0x01–0x19` (occupied) → free that slot
+- `0x01–0x1D` (occupied) → free that slot
 - anything else → start of a new table entry, scan to closing `0x00`
 
-Direct references (`0x01–0x19`) and literals (`0x20–0x7E`) are handled
-inline. Standalone `0x7F` passes the next byte through as a literal.
+Direct references (`0x01–0x1D`) and literals (`0x20–0x7E`) are handled
+inline. RLE markers (`0x1E`, `0x1F`) are passed through with their count
+byte for `rleExpand` to restore. Standalone `0x7F` passes the next byte
+through as a literal.
 
 ## 7-bit packing (`pack7` / `unpack7`)
 
@@ -112,6 +127,8 @@ uses this to know when to stop reading.
 
 ## Slot management
 
-`lowestFreeSlot` scans slots 1–255 and returns the first unoccupied one
-(or 0 if all are full). This ensures direct slots (cheaper references)
-are always consumed before extended slots.
+`lowestFreeSlot` scans slots 1–255, skipping reserved bytes (`0x09`,
+`0x0A`, `0x1E`, `0x1F`), and returns the first unoccupied one (or 0 if
+all are full). This ensures direct slots (cheaper 1-byte references)
+are always consumed before extended slots (3-byte references). With 4
+reserved bytes, a maximum of 251 slots are available.

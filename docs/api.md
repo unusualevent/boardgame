@@ -12,11 +12,14 @@ import "git.risottobias.org/claude/boardgame"
 func Encode(src []byte) ([]byte, error)
 ```
 
-Compresses `src` using table substitution and 7-bit packing. Printable
-ASCII (`0x20–0x7E`), tab (`0x09`), and newline (`0x0A`) participate in
-compression. Non-ASCII bytes (UTF-8, etc.) are DEL-escaped and pass
-through transparently — they act as barriers in the candidate search
-but round-trip correctly.
+Compresses `src` using RLE, table substitution, and 7-bit packing.
+Runs of 4–15 spaces or tabs are collapsed first, then repeated
+sequences are replaced with dictionary references, and finally all
+bytes are packed into a 7-bit stream. Printable ASCII (`0x20–0x7E`),
+tab (`0x09`), and newline (`0x0A`) participate in compression.
+Non-ASCII bytes (UTF-8, etc.) are DEL-escaped and pass through
+transparently — they act as barriers in the candidate search but
+round-trip correctly.
 
 ### Decode
 
@@ -58,12 +61,12 @@ The entire compressed input is read and decompressed on the first
 
 | Error                | Meaning                                              |
 |----------------------|------------------------------------------------------|
-| `ErrTooManyEntries`  | More than 255 table entries defined                  |
+| `ErrTooManyEntries`  | More than 251 table entries defined                  |
 | `ErrUnterminatedSeq` | Table entry missing its closing `0x00`               |
 | `ErrBadRef`          | Reference to an undefined or out-of-range table slot |
 | `ErrByteOutOfRange`  | (No longer returned by Encode; kept for compatibility) |
 | `ErrTruncated`       | Bitstream ended mid-value (e.g. after a DEL escape)  |
-| `ErrNoFreeSlot`      | All 255 table slots are occupied                     |
+| `ErrNoFreeSlot`      | All 251 table slots are occupied                     |
 
 ## Usage example
 

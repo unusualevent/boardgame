@@ -10,7 +10,7 @@
 //     (up to 27 direct slots). An unpaired null followed by a ref byte
 //     (0x01–0x1D) frees that slot. The sequence {null}{DEL}{byte}
 //     extends references to a full 8-bit range (slots 0x1E–0xFF),
-//     allowing up to 253 entries.
+//     allowing up to 251 entries.
 //  3. 7-bit packing — since all ASCII bytes have bit 7 = 0, each byte
 //     is stored as 7 bits. The DEL byte (0x7F) escapes a full 8-bit
 //     value: the next 8 bits are returned unchanged.

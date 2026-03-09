@@ -9,8 +9,8 @@ using three complementary techniques:
    shrinking whitespace-heavy input before the suffix array runs.
 2. **Table substitution** — repeated sequences are stored in a
    dictionary and replaced with single-byte (or 3-byte extended)
-   references. Up to 253 entries; slots can be freed and reused
-   mid-stream.
+   references. Up to 251 entries (4 byte values are reserved); slots
+   can be freed and reused mid-stream.
 3. **7-bit packing** — since ASCII bytes never use bit 7, each byte is
    stored as 7 bits, saving ~12.5% unconditionally.
 
