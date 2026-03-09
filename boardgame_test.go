@@ -115,19 +115,22 @@ func TestLowestFreeSlot(t *testing.T) {
 }
 
 func TestExtendedRef(t *testing.T) {
-	// Build intermediate stream with an extended reference (slot 0xF0)
-	// Manually fill direct slots 1–25, then define one more entry
-	// which must land in slot 0x1A and be referenced via null-DEL-byte.
+	// Build intermediate stream that fills all direct slots (skipping
+	// reserved bytes 0x09/0x0A), then defines one more entry which
+	// must land in the extended range and be referenced via null-DEL-byte.
 	intermediate := make([]byte, 0)
 
-	// define 25 entries in direct slots
+	// define entries for all non-reserved direct slots
 	for s := byte(1); s <= maxDirectRef; s++ {
+		if isReserved(s) {
+			continue
+		}
 		seq := []byte{minGlyph + s, minGlyph + s}
 		intermediate = append(intermediate, 0x00)
 		intermediate = append(intermediate, seq...)
 		intermediate = append(intermediate, 0x00)
 	}
-	// define 26th entry → slot 0x1A
+	// next free slot is 0x1A (since 0x09/0x0A were skipped, not filled)
 	intermediate = append(intermediate, 0x00, 'h', 'i', 0x00)
 	// reference it via null-DEL-0x1A
 	intermediate = append(intermediate, 0x00, delByte, 0x1A)
@@ -142,12 +145,16 @@ func TestExtendedRef(t *testing.T) {
 }
 
 func TestExtendedRefManual(t *testing.T) {
-	// Test null-DEL-byte with an arbitrary slot like 0xF0
+	// Test null-DEL-byte with an arbitrary slot like 0xF0.
+	// Fill all non-reserved direct slots, then extended slots up to 0xEF.
 	intermediate := []byte{
 		0x00, 'a', 'b', 0x00, // slot 1 = "ab"
 	}
-	// fill slots 2–25
+	// fill remaining non-reserved direct slots (2–25, skipping reserved)
 	for s := byte(2); s <= maxDirectRef; s++ {
+		if isReserved(s) {
+			continue
+		}
 		intermediate = append(intermediate, 0x00, minGlyph+s, minGlyph+s, 0x00)
 	}
 	// slots 0x1A through 0xEF

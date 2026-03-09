@@ -18,11 +18,25 @@ import (
 
 const (
 	minGlyph       = 0x20
-	maxGlyph       = 0x73
+	maxGlyph       = 0x7E
 	maxDirectRef   = 0x19 // slots 0x01–0x19: single-byte reference
 	maxExtRef      = 0xFF // slots 0x1A–0xFF: null-DEL-byte reference
 	delByte        = 0x7F // escape for raw 8-bit values
+	tab            = 0x09
+	newline        = 0x0A
 )
+
+// isLiteral reports whether b is a valid literal byte in the intermediate
+// stream (printable glyphs, tab, or newline).
+func isLiteral(b byte) bool {
+	return (b >= minGlyph && b <= maxGlyph) || b == tab || b == newline
+}
+
+// isReserved reports whether b is reserved and must not be used as a table
+// slot ID (tab and newline are literal bytes, not references).
+func isReserved(b byte) bool {
+	return b == tab || b == newline
+}
 
 var (
 	ErrTooManyEntries  = errors.New("boardgame: table exceeds 255 entries")
@@ -45,7 +59,7 @@ func refCost(slot byte) int {
 // Encode compresses src using table substitution then 7-bit packing.
 func Encode(src []byte) ([]byte, error) {
 	for _, b := range src {
-		if b < minGlyph || b > maxGlyph {
+		if !isLiteral(b) {
 			return nil, ErrByteOutOfRange
 		}
 	}
@@ -125,9 +139,13 @@ func unpack7(src []byte) ([]byte, error) {
 }
 
 // lowestFreeSlot returns the lowest unused slot number (1–0xFF),
-// or 0 if all 255 slots are occupied.
+// or 0 if all 255 slots are occupied. Slots reserved for literal
+// bytes (tab, newline) are skipped.
 func lowestFreeSlot(table map[byte][]byte) byte {
 	for s := byte(1); s != 0; s++ { // 1..255, wraps to 0
+		if isReserved(s) {
+			continue
+		}
 		if _, ok := table[s]; !ok {
 			return s
 		}
@@ -166,7 +184,7 @@ func tableSubstitute(src []byte) []byte {
 				}
 				valid := true
 				for j := 0; j < len(s); j++ {
-					if s[j] < minGlyph || s[j] > maxGlyph {
+					if !isLiteral(s[j]) {
 						valid = false
 						break
 					}
@@ -314,6 +332,10 @@ func tableExpand(src []byte) ([]byte, error) {
 				return nil, ErrTruncated
 			}
 			out = append(out, src[i])
+			i++
+
+		case b == tab || b == newline:
+			out = append(out, b)
 			i++
 
 		case b >= 0x01 && b <= maxDirectRef:
