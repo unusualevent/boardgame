@@ -42,30 +42,84 @@ func literalRuns(data string) [][2]int {
 // It also returns runEnd where runEnd[i] is the end of i's literal run
 // (or 0 if i is not in a run). Suffixes are compared only up to their run
 // boundary, so substrings never span across non-literal bytes.
+//
+// Uses a single-byte radix partition on the first byte, then comparison-
+// sorts within each bucket starting from byte 1. With ~97 distinct literal
+// byte values, buckets average n/97 elements, making the per-bucket sorts
+// fast.
 func buildSA(data string, runs [][2]int) ([]int, []int) {
 	runEnd := make([]int, len(data))
-	var sa []int
+	n := 0
 	for _, r := range runs {
 		for i := r[0]; i < r[1]; i++ {
 			runEnd[i] = r[1]
-			sa = append(sa, i)
+			n++
 		}
 	}
-	sort.Slice(sa, func(a, b int) bool {
-		ai, bi := sa[a], sa[b]
-		ae, be := runEnd[ai], runEnd[bi]
-		la, lb := ae-ai, be-bi
-		ml := la
-		if lb < ml {
-			ml = lb
+	if n == 0 {
+		return nil, runEnd
+	}
+
+	// Count occurrences per first byte.
+	var counts [256]int
+	for _, r := range runs {
+		for i := r[0]; i < r[1]; i++ {
+			counts[data[i]]++
 		}
-		for k := 0; k < ml; k++ {
-			if data[ai+k] != data[bi+k] {
-				return data[ai+k] < data[bi+k]
+	}
+
+	// Prefix sum → offsets.
+	var offsets [256]int
+	total := 0
+	for i := range counts {
+		offsets[i] = total
+		total += counts[i]
+	}
+
+	// Distribute into SA by first byte.
+	sa := make([]int, n)
+	var writePos [256]int
+	copy(writePos[:], offsets[:])
+	for _, r := range runs {
+		for i := r[0]; i < r[1]; i++ {
+			b := data[i]
+			sa[writePos[b]] = i
+			writePos[b]++
+		}
+	}
+
+	// Sort within each non-trivial bucket (size > 1), comparing from
+	// byte 1 onward (first byte is already equal within each bucket).
+	for b := range 256 {
+		lo := offsets[b]
+		hi := lo + counts[b]
+		if hi-lo <= 1 {
+			continue
+		}
+		bucket := sa[lo:hi]
+		sort.Slice(bucket, func(a, b int) bool {
+			ai, bi := bucket[a]+1, bucket[b]+1
+			ae, be := runEnd[bucket[a]], runEnd[bucket[b]]
+			la, lb := ae-ai, be-bi
+			if la < 0 {
+				la = 0
 			}
-		}
-		return la < lb
-	})
+			if lb < 0 {
+				lb = 0
+			}
+			ml := la
+			if lb < ml {
+				ml = lb
+			}
+			for k := 0; k < ml; k++ {
+				if data[ai+k] != data[bi+k] {
+					return data[ai+k] < data[bi+k]
+				}
+			}
+			return la < lb
+		})
+	}
+
 	return sa, runEnd
 }
 
@@ -135,11 +189,7 @@ func findBestCandidate(data string, rc int, used map[string]bool) (string, int) 
 
 	// evaluate scores a candidate interval [start, end) at the given length.
 	evaluate := func(length, start, end int) {
-		if length < 2 {
-			return
-		}
-		groupSize := end - start
-		if groupSize < 2 {
+		if length < 2 || end-start < 2 {
 			return
 		}
 		pos := sa[start]

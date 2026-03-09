@@ -39,10 +39,11 @@ Build the suffix array once, maintain a candidate structure. After each
 substitution, invalidate affected positions rather than rebuilding from
 scratch. Attacks the 21% `buildSA` cost multiplied by ~25 iterations.
 
-### 4. Radix/counting sort for positions
-`sort.Ints` uses pdqsort (comparison-based). Positions are bounded integers
-(0..len(data)), so counting sort or radix sort is O(n) instead of
-O(n log n).
+### 4. Radix sort for SA construction
+Replace full comparison-based `sort.Slice` with a single-byte radix
+partition (counting sort on first byte) followed by comparison sort
+within each bucket. With ~97 distinct literal byte values, buckets
+average n/97 elements, making per-bucket sorts very fast.
 
 ## Results
 
@@ -64,7 +65,7 @@ Allocs dropped massively. Time modestly faster on controlled benchmarks.
 | SampleVue | 112ms | **127ms** (noisy) | 380,339 | **2,964** |
 | SampleRuby | 36ms | **55ms** (noisy) | 125,302 | **1,937** |
 
-### After optimization 2: LCP interval scan (pending commit)
+### After optimization 2: LCP interval scan (commit 5ec07a8)
 
 Replaced O(maxLCP * n) nested loop with single-pass O(n) stack-based
 LCP interval decomposition. Huge speedup across all benchmarks.
@@ -94,13 +95,54 @@ LCP interval decomposition. Huge speedup across all benchmarks.
 | .vue (5.3KB) | 149ms | **103ms** | **1.45x** |
 | .rb (5.6KB) | 109ms | **93ms** | **1.17x** |
 
-**Cumulative vs original baseline:**
+### After optimization 4: radix sort SA construction
 
-| Benchmark | Original | Current | Total speedup |
+Single-byte radix partition (counting sort on first byte) reduces
+comparison sort to within-bucket only. Each bucket averages n/97
+elements, drastically reducing sort work.
+
+**go test -bench (count=3 medians):**
+
+| Benchmark | Before (LCP scan) | After (radix SA) | Speedup |
 |---|---|---|---|
-| Encode4KB | 105ms | **23.5ms** | **4.5x** |
-| ~/lab avg | 63.4ms | **41.0ms** | **1.55x** |
-| ~/lab .java | 401ms | **188ms** | **2.1x** |
+| Encode4KB | 23.5ms | **28ms** | 0.84x (slight regression) |
+| RealLibrary | 16.4ms | **12.3ms** | **1.33x** |
+| RealTests | 107ms | **82ms** | **1.30x** |
+| SampleGo | 29ms | **21.7ms** | **1.34x** |
+| SampleHTML | 14.3ms | **11.1ms** | **1.29x** |
+| SampleJS | 36.5ms | **26.7ms** | **1.37x** |
+| SampleJSON | 5.9ms | **4.3ms** | **1.37x** |
+| SampleVue | 77ms | **58ms** | **1.33x** |
+| SampleRuby | 27.9ms | **20.7ms** | **1.35x** |
+
+**~/lab example tool (1332 files):**
+
+| Metric | After opt 2 | After opt 4 | Speedup |
+|---|---|---|---|
+| Avg time | 41.0ms | **29.1ms** | **1.41x** |
+| Avg ratio | 39.8% | **39.8%** | unchanged |
+| .java (16.5KB) | 188ms | **147ms** | **1.28x** |
+| .go (4.8KB) | 81ms | **58ms** | **1.40x** |
+| .vue (5.3KB) | 103ms | **72ms** | **1.43x** |
+| .rb (5.6KB) | 93ms | **57ms** | **1.63x** |
+
+### Cumulative: original baseline → final
+
+| Benchmark | Original | Final | Total speedup |
+|---|---|---|---|
+| Encode4KB | 105ms | **28ms** | **3.75x** |
+| RealLibrary | 22.2ms | **12.3ms** | **1.80x** |
+| RealTests | 189ms | **82ms** | **2.30x** |
+| SampleGo | 51ms | **21.7ms** | **2.35x** |
+| SampleHTML | 26ms | **11.1ms** | **2.34x** |
+| SampleJS | 47ms | **26.7ms** | **1.76x** |
+| SampleJSON | 9.6ms | **4.3ms** | **2.23x** |
+| SampleVue | 112ms | **58ms** | **1.93x** |
+| SampleRuby | 36ms | **20.7ms** | **1.74x** |
+| ~/lab avg | 63.4ms | **29.1ms** | **2.18x** |
+| ~/lab .java | 401ms | **147ms** | **2.73x** |
+| ~/lab .go | 131ms | **58ms** | **2.26x** |
+| ~/lab .vue | 149ms | **72ms** | **2.07x** |
 
 ## Failed approaches
 
@@ -111,3 +153,22 @@ Pool acquire/release overhead exceeded savings for small slices. Caused
 ### Early termination at minSavings=3
 Slightly hurt compression ratio (-0.3%) without enough iteration savings
 to offset per-iteration cost. Reverted.
+
+### Batch SA build (apply multiple candidates per SA construction)
+Extracted all candidates from one SA build, then applied them one at a
+time with O(n) re-scoring via `countNonOverlap`. Failed for two reasons:
+1. Unlimited batching corrupted the encoding (reference to undefined
+   table entry errors on real files)
+2. Even with safe batch limits (1-16), the O(k² * n) re-scoring cost
+   exceeded the SA rebuild cost it was trying to avoid
+Reverted entirely.
+
+### sort.Interface concrete type for SA construction
+Replacing `sort.Slice` closure with a concrete `sort.Interface` type
+was ~20% slower. Go's pdqsort closure implementation is well-optimized;
+the virtual dispatch overhead of `sort.Interface` exceeded any savings.
+
+### Two-byte radix sort (256² = 65K buckets)
+Allocating and iterating 65K-element count/offset arrays was too
+expensive for typical input sizes (n < 20K). Twice as slow as the
+single-byte radix approach.
