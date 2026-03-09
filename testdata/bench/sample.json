@@ -1,0 +1,120 @@
+{
+  "application": {
+    "name": "admin-dashboard",
+    "version": "2.4.1",
+    "environment": "production"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "tls": {
+      "enabled": true,
+      "cert_file": "/etc/ssl/certs/server.crt",
+      "key_file": "/etc/ssl/private/server.key"
+    },
+    "timeouts": {
+      "read": "30s",
+      "write": "30s",
+      "idle": "120s",
+      "shutdown": "15s"
+    }
+  },
+  "database": {
+    "primary": {
+      "driver": "postgres",
+      "host": "db-primary.internal",
+      "port": 5432,
+      "name": "app_production",
+      "pool": {
+        "max_open": 50,
+        "max_idle": 10,
+        "max_lifetime": "1h"
+      }
+    },
+    "replica": {
+      "driver": "postgres",
+      "host": "db-replica.internal",
+      "port": 5432,
+      "name": "app_production",
+      "pool": {
+        "max_open": 100,
+        "max_idle": 20,
+        "max_lifetime": "1h"
+      }
+    },
+    "migrations": {
+      "directory": "./migrations",
+      "auto_migrate": false
+    }
+  },
+  "cache": {
+    "driver": "redis",
+    "host": "cache.internal",
+    "port": 6379,
+    "database": 0,
+    "prefix": "app:",
+    "ttl": "15m",
+    "pool_size": 20
+  },
+  "auth": {
+    "jwt": {
+      "secret_env": "JWT_SECRET",
+      "expiration": "24h",
+      "refresh_expiration": "168h",
+      "issuer": "admin-dashboard"
+    },
+    "oauth": {
+      "providers": [
+        {
+          "name": "google",
+          "client_id_env": "GOOGLE_CLIENT_ID",
+          "client_secret_env": "GOOGLE_CLIENT_SECRET",
+          "redirect_url": "https://app.example.com/auth/google/callback",
+          "scopes": ["openid", "profile", "email"]
+        },
+        {
+          "name": "github",
+          "client_id_env": "GITHUB_CLIENT_ID",
+          "client_secret_env": "GITHUB_CLIENT_SECRET",
+          "redirect_url": "https://app.example.com/auth/github/callback",
+          "scopes": ["user:email", "read:org"]
+        }
+      ]
+    },
+    "rate_limit": {
+      "login_attempts": 5,
+      "window": "15m",
+      "lockout_duration": "30m"
+    }
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": "stdout",
+    "fields": {
+      "service": "admin-dashboard",
+      "environment": "production"
+    }
+  },
+  "features": {
+    "dark_mode": true,
+    "notifications": true,
+    "export_csv": true,
+    "bulk_operations": false,
+    "two_factor_auth": true,
+    "api_keys": true
+  },
+  "notifications": {
+    "email": {
+      "enabled": true,
+      "smtp_host": "smtp.example.com",
+      "smtp_port": 587,
+      "from": "noreply@example.com"
+    },
+    "slack": {
+      "enabled": true,
+      "webhook_env": "SLACK_WEBHOOK_URL",
+      "channel": "#alerts"
+    }
+  }
+}

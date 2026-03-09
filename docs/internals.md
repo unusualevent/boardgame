@@ -5,8 +5,18 @@ This document describes the internal architecture of the boardgame codec.
 ## Compression pipeline
 
 ```
-Source bytes ──► tableSubstitute ──► intermediate stream ──► pack7 ──► compressed output
+Source bytes ──► escapeNonLiteral ──► tableSubstitute ──► intermediate stream ──► pack7 ──► compressed output
 ```
+
+### Non-ASCII escaping (`escapeNonLiteral`)
+
+Before table substitution, any byte that is not a literal (not printable
+ASCII, tab, or newline) is prefixed with a DEL escape byte (`0x7F`).
+This includes UTF-8 continuation bytes, null bytes, and DEL itself.
+The escaped bytes act as barriers in the candidate search — they will
+not participate in dictionary compression — but round-trip correctly
+through the rest of the pipeline since `pack7`, `unpack7`, and
+`tableExpand` all handle DEL escapes natively.
 
 ## Decompression pipeline
 

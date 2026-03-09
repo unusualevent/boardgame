@@ -33,8 +33,10 @@ restored, err := boardgame.Decode(compressed)
 | `Decode(src []byte) ([]byte, error)` | Decompress encoded bytes |
 | `Stats(orig, comp []byte) (int, int, float64)` | Original size, compressed size, ratio |
 
-Input must be printable ASCII (`0x20`–`0x7E`) plus tab (`0x09`) and newline
-(`0x0A`). See [docs/api.md](docs/api.md) for full details.
+Input can contain any bytes. Printable ASCII (`0x20`–`0x7E`), tab, and
+newline participate in compression; non-ASCII bytes (UTF-8, etc.) are
+DEL-escaped and pass through transparently. See [docs/api.md](docs/api.md)
+for full details.
 
 ## Example
 

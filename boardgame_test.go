@@ -2,6 +2,8 @@ package boardgame
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -203,14 +205,29 @@ func TestDecodeErrors(t *testing.T) {
 	}
 }
 
-func TestEncodeRejectsInvalidBytes(t *testing.T) {
-	_, err := Encode([]byte{0x00})
-	if err != ErrByteOutOfRange {
-		t.Errorf("expected ErrByteOutOfRange, got %v", err)
+func TestNonASCIIRoundTrip(t *testing.T) {
+	cases := []string{
+		"hello \xe2\x80\x94 world",                     // em dash
+		"a \xe2\x86\x92 b \xe2\x86\x92 c",             // right arrows
+		"caf\xc3\xa9 caf\xc3\xa9 caf\xc3\xa9",         // UTF-8 with repeated ASCII
+		"\xe2\x80\x93",                                   // lone en dash
+		"ascii only then \xc3\xbc\xc3\xb6\xc3\xa4",    // umlauts at end
+		string([]byte{0x00, 0x7F, 0xFF}),                // null, DEL, 0xFF
+		"func() { fmt.Println(\xe2\x80\x9chello\xe2\x80\x9d) }", // smart quotes
 	}
-	_, err = Encode([]byte{0x80})
-	if err != ErrByteOutOfRange {
-		t.Errorf("expected ErrByteOutOfRange, got %v", err)
+	for _, tc := range cases {
+		src := []byte(tc)
+		enc, err := Encode(src)
+		if err != nil {
+			t.Fatalf("Encode(%q): %v", tc, err)
+		}
+		dec, err := Decode(enc)
+		if err != nil {
+			t.Fatalf("Decode(Encode(%q)): %v", tc, err)
+		}
+		if !bytes.Equal(src, dec) {
+			t.Errorf("round-trip failed for %q: got %q", tc, dec)
+		}
 	}
 }
 
@@ -353,5 +370,135 @@ func BenchmarkUnpack7(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		unpack7(packed)
+	}
+}
+
+// --- Embedded real source benchmarks ---
+
+// readSelf reads a source file from the module root.
+func readSelf(b *testing.B, name string) []byte {
+	b.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		b.Fatalf("reading %s: %v", name, err)
+	}
+	return data
+}
+
+func BenchmarkEncodeRealLibrary(b *testing.B) {
+	src := readSelf(b, "boardgame.go")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeRealTests(b *testing.B) {
+	src := readSelf(b, "boardgame_test.go")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkDecodeRealLibrary(b *testing.B) {
+	src := readSelf(b, "boardgame.go")
+	enc, _ := Encode(src)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Decode(enc)
+	}
+}
+
+// --- Testdata sample file benchmarks ---
+
+// readBenchFile reads a sample file from testdata/bench/.
+func readBenchFile(b *testing.B, name string) []byte {
+	b.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", "bench", name))
+	if err != nil {
+		b.Fatalf("reading testdata/bench/%s: %v", name, err)
+	}
+	return data
+}
+
+func BenchmarkEncodeSampleGo(b *testing.B) {
+	src := readBenchFile(b, "sample.go")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeSampleHTML(b *testing.B) {
+	src := readBenchFile(b, "sample.html")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeSampleJS(b *testing.B) {
+	src := readBenchFile(b, "sample.js")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeSampleJSON(b *testing.B) {
+	src := readBenchFile(b, "sample.json")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeSampleVue(b *testing.B) {
+	src := readBenchFile(b, "sample.vue")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncodeSampleRuby(b *testing.B) {
+	src := readBenchFile(b, "sample.rb")
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+// RoundTrip test for all sample files to ensure they compress correctly.
+func TestSampleFilesRoundTrip(t *testing.T) {
+	files := []string{"sample.go", "sample.html", "sample.js", "sample.json", "sample.vue", "sample.rb"}
+	for _, name := range files {
+		data, err := os.ReadFile(filepath.Join("testdata", "bench", name))
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		enc, err := Encode(data)
+		if err != nil {
+			t.Fatalf("Encode(%s): %v", name, err)
+		}
+		dec, err := Decode(enc)
+		if err != nil {
+			t.Fatalf("Decode(%s): %v", name, err)
+		}
+		if !bytes.Equal(data, dec) {
+			t.Errorf("round-trip failed for %s", name)
+		}
+		_, _, ratio := Stats(data, enc)
+		t.Logf("%-12s %5d B -> %5d B  (%.1f%% compression)", name, len(data), len(enc), ratio*100)
 	}
 }

@@ -1,13 +1,13 @@
 // Package boardgame provides ASCII source code compression and decompression.
 //
 // Compression has two stages:
-//  1. Table substitution — repeated sequences are placed in a table
+//  1. Table substitution —repeated sequences are placed in a table
 //     delimited by 0x00 bytes and referenced with bytes 0x01–0x19
 //     (up to 25 direct slots). An unpaired null followed by a ref byte
 //     (0x01–0x19) frees that slot. New entries always claim the lowest
 //     free slot. The sequence {null}{DEL}{byte} extends references to
 //     a full 8-bit range (slots 0x1A–0xFF), allowing up to 255 entries.
-//  2. 7-bit packing — since all ASCII bytes have bit 7 = 0, each byte
+//  2. 7-bit packing —since all ASCII bytes have bit 7 = 0, each byte
 //     is stored as 7 bits. The DEL byte (0x7F) escapes a full 8-bit
 //     value: the next 8 bits are returned unchanged.
 package boardgame
@@ -57,15 +57,37 @@ func refCost(slot byte) int {
 	return 3 // 0x00 + 0x7F + slot
 }
 
-// Encode compresses src using table substitution then 7-bit packing.
-func Encode(src []byte) ([]byte, error) {
+// escapeNonLiteral prepends a DEL escape byte before each non-literal
+// byte in src, allowing UTF-8 and other non-ASCII content to pass
+// through the compression pipeline. Non-literal bytes act as barriers
+// in the candidate search but round-trip correctly.
+func escapeNonLiteral(src []byte) []byte {
+	n := 0
 	for _, b := range src {
 		if !isLiteral(b) {
-			return nil, ErrByteOutOfRange
+			n++
 		}
 	}
+	if n == 0 {
+		return src
+	}
+	out := make([]byte, 0, len(src)+n)
+	for _, b := range src {
+		if !isLiteral(b) {
+			out = append(out, delByte, b)
+		} else {
+			out = append(out, b)
+		}
+	}
+	return out
+}
 
-	intermediate := tableSubstitute(src)
+// Encode compresses src using table substitution then 7-bit packing.
+// Non-ASCII bytes (UTF-8, etc.) are DEL-escaped and pass through
+// transparently; only ASCII portions participate in compression.
+func Encode(src []byte) ([]byte, error) {
+	escaped := escapeNonLiteral(src)
+	intermediate := tableSubstitute(escaped)
 	return pack7(intermediate), nil
 }
 

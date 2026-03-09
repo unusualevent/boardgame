@@ -12,9 +12,11 @@ import "boardgame"
 func Encode(src []byte) ([]byte, error)
 ```
 
-Compresses `src` using table substitution and 7-bit packing. All input
-bytes must be in the glyph range `0x20–0x7E` plus tab (`0x09`) and newline (`0x0A`); returns `ErrByteOutOfRange`
-otherwise.
+Compresses `src` using table substitution and 7-bit packing. Printable
+ASCII (`0x20–0x7E`), tab (`0x09`), and newline (`0x0A`) participate in
+compression. Non-ASCII bytes (UTF-8, etc.) are DEL-escaped and pass
+through transparently — they act as barriers in the candidate search
+but round-trip correctly.
 
 ### Decode
 
@@ -40,7 +42,7 @@ Returns the original length, compressed length, and compression ratio
 | `ErrTooManyEntries`  | More than 255 table entries defined                  |
 | `ErrUnterminatedSeq` | Table entry missing its closing `0x00`               |
 | `ErrBadRef`          | Reference to an undefined or out-of-range table slot |
-| `ErrByteOutOfRange`  | Input byte outside the valid glyph range `0x20–0x7E` plus tab (`0x09`) and newline (`0x0A`) |
+| `ErrByteOutOfRange`  | (No longer returned by Encode; kept for compatibility) |
 | `ErrTruncated`       | Bitstream ended mid-value (e.g. after a DEL escape)  |
 | `ErrNoFreeSlot`      | All 255 table slots are occupied                     |
 

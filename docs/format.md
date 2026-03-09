@@ -1,7 +1,8 @@
 # Boardgame Wire Format
 
-Boardgame compresses ASCII source code in two stages: table substitution
-followed by 7-bit packing.
+Boardgame compresses source code in two stages: table substitution
+followed by 7-bit packing. Non-ASCII bytes (UTF-8, etc.) are DEL-escaped
+before compression and pass through transparently.
 
 ## Byte ranges
 
