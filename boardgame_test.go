@@ -2,6 +2,7 @@ package boardgame
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +15,9 @@ func TestRoundTrip(t *testing.T) {
 		"no repeals here",
 		"    ",
 		" ",
+		"`backtick` `backtick` `backtick`",
+		"func main() {\n\tfmt.Println(`hello`)\n}",
+		"~!@#$%^&*()_+-=[]{}|;':\",./<>?",
 	}
 	for _, tc := range cases {
 		src := []byte(tc)
@@ -233,5 +237,121 @@ func TestStats(t *testing.T) {
 	}
 	if ratio <= 0 {
 		t.Errorf("expected positive ratio, got %f", ratio)
+	}
+}
+
+func TestFullPrintableASCII(t *testing.T) {
+	// Every valid literal byte should round-trip.
+	var buf []byte
+	buf = append(buf, tab, newline)
+	for b := byte(minGlyph); b <= maxGlyph; b++ {
+		buf = append(buf, b)
+	}
+	// Repeat so there's something to compress.
+	src := bytes.Repeat(buf, 3)
+	enc, err := Encode(src)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+	dec, err := Decode(enc)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+	if !bytes.Equal(src, dec) {
+		t.Error("round-trip failed for full printable ASCII set")
+	}
+}
+
+// makeSource generates a pseudo-source-code string of approximately n bytes.
+func makeSource(n int) []byte {
+	lines := []string{
+		"func main() {",
+		"\tfmt.Println(`hello world`)",
+		"\tfor i := 0; i < 100; i++ {",
+		"\t\tresult := process(i)",
+		"\t\tif result > threshold {",
+		"\t\t\tfmt.Printf(\"value: %d\\n\", result)",
+		"\t\t}",
+		"\t}",
+		"}",
+		"",
+	}
+	block := strings.Join(lines, "\n")
+	reps := (n / len(block)) + 1
+	return []byte(strings.Repeat(block, reps)[:n])
+}
+
+func BenchmarkEncode100B(b *testing.B) {
+	src := makeSource(100)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncode1KB(b *testing.B) {
+	src := makeSource(1024)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncode4KB(b *testing.B) {
+	src := makeSource(4 * 1024)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkEncode16KB(b *testing.B) {
+	src := makeSource(16 * 1024)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Encode(src)
+	}
+}
+
+func BenchmarkDecode1KB(b *testing.B) {
+	src := makeSource(1024)
+	enc, _ := Encode(src)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Decode(enc)
+	}
+}
+
+func BenchmarkDecode16KB(b *testing.B) {
+	src := makeSource(16 * 1024)
+	enc, _ := Encode(src)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		Decode(enc)
+	}
+}
+
+func BenchmarkPack7(b *testing.B) {
+	src := makeSource(4 * 1024)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		pack7(src)
+	}
+}
+
+func BenchmarkUnpack7(b *testing.B) {
+	src := makeSource(4 * 1024)
+	packed := pack7(src)
+	b.SetBytes(int64(len(src)))
+	b.ResetTimer()
+	for b.Loop() {
+		unpack7(packed)
 	}
 }
